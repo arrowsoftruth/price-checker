@@ -1,274 +1,423 @@
-import { useState, useCallback } from "react";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unit Price Showdown</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0e0c;
+    --surface: #1a1916;
+    --card: #222119;
+    --accent: #e8c547;
+    --accent2: #e87d47;
+    --text: #f0ede6;
+    --muted: #7a7768;
+    --win: #5ecb84;
+    --lose: #e86060;
+    --border: #2e2c28;
+  }
 
-const PRICING_TYPES = [
-  { value: "per_kg", label: "$/kg (loose/weighed)" },
-  { value: "per_item", label: "Fixed price (bundle/pack)" },
-];
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-let idCounter = 0;
-const newItem = (overrides = {}) => ({
-  id: ++idCounter,
-  name: "",
-  price: "",
-  weight: "",
-  type: "per_kg",
-  ...overrides,
-});
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    padding: 2rem 1rem 4rem;
+  }
 
-function computePer100g(item) {
-  const price = parseFloat(item.price);
-  const weight = parseFloat(item.weight);
-  if (isNaN(price) || isNaN(weight) || weight <= 0) return null;
-  if (item.type === "per_kg") return (price / 1000) * 100;
-  return (price / weight) * 100;
-}
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; opacity: 0.04; z-index: 999;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  }
 
-export default function App() {
-  const [items, setItems] = useState([
-    newItem({ name: "Loose bananas", price: "2.99", weight: "850", type: "per_kg" }),
-    newItem({ name: "Banana bundle", price: "3.50", weight: "900", type: "per_item" }),
-  ]);
+  .container { max-width: 680px; margin: 0 auto; }
 
-  const add = () => setItems((p) => [...p, newItem()]);
-  const remove = (id) => setItems((p) => p.filter((i) => i.id !== id));
-  const update = (id, field, value) =>
-    setItems((p) => p.map((i) => (i.id === id ? { ...i, [field]: value } : i)));
+  header { margin-bottom: 3rem; }
 
-  const computed = items.map((item) => ({ ...item, per100g: computePer100g(item) }));
-  const valid = computed.filter((i) => i.per100g !== null);
-  const minP = valid.length ? Math.min(...valid.map((i) => i.per100g)) : null;
-  const maxP = valid.length ? Math.max(...valid.map((i) => i.per100g)) : null;
-  const hasDiff = minP !== null && maxP !== null && minP !== maxP;
+  .eyebrow {
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
 
-  const savingPer100g = hasDiff ? maxP - minP : 0;
-  const savingPct = hasDiff ? ((savingPer100g / maxP) * 100).toFixed(0) : 0;
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2rem, 6vw, 3.2rem);
+    font-weight: 800;
+    line-height: 1.05;
+    color: var(--text);
+  }
 
-  return (
-    <div style={{
-      minHeight: "100vh",
-      background: "#f5f0e8",
-      fontFamily: "'Georgia', serif",
-      padding: "0 0 80px",
-    }}>
-      {/* Header */}
-      <div style={{
-        background: "#1a3a2a",
-        padding: "24px 20px 20px",
-        borderBottom: "4px solid #e8b84b",
-      }}>
-        <div style={{ fontSize: 11, letterSpacing: "0.2em", color: "#e8b84b", textTransform: "uppercase", marginBottom: 6 }}>
-          Supermarket Price Checker
-        </div>
-        <div style={{ fontSize: 26, fontWeight: "bold", color: "#f5f0e8", lineHeight: 1.1 }}>
-          Which is actually<br />cheaper?
-        </div>
-        <div style={{ fontSize: 12, color: "#7aaa8a", marginTop: 8 }}>
-          Compares per-kg and per-bundle prices fairly
-        </div>
-      </div>
+  h1 span { color: var(--accent); }
 
-      <div style={{ padding: "16px 16px 0" }}>
+  .subtitle {
+    margin-top: 0.75rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    line-height: 1.6;
+  }
 
-        {/* Savings summary */}
-        {hasDiff && (
-          <div style={{
-            background: "#1a3a2a",
-            borderRadius: 16,
-            padding: "16px 20px",
-            marginBottom: 16,
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-          }}>
-            <div style={{ fontSize: 36 }}>💰</div>
-            <div>
-              <div style={{ color: "#7aaa8a", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                Best option saves you
-              </div>
-              <div style={{ color: "#e8b84b", fontSize: 24, fontWeight: "bold", lineHeight: 1.1 }}>
-                ${savingPer100g.toFixed(2)}<span style={{ fontSize: 13, color: "#7aaa8a", fontWeight: "normal" }}> /100g</span>
-              </div>
-              <div style={{ color: "#7aaa8a", fontSize: 12, marginTop: 2 }}>
-                {savingPct}% cheaper than the priciest option
-              </div>
+  .items-wrapper { display: flex; flex-direction: column; gap: 1rem; }
+
+  .item-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+
+  .item-card.winner { border-color: var(--win); }
+  .item-card.loser  { border-color: var(--lose); opacity: 0.75; }
+
+  .item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .item-label {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--accent2);
+  }
+
+  .remove-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    font-family: 'Space Mono', monospace;
+    transition: all 0.15s;
+  }
+  .remove-btn:hover { border-color: var(--lose); color: var(--lose); }
+
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+  .field { display: flex; flex-direction: column; gap: 0.35rem; }
+
+  label {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  input, select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.9rem;
+    padding: 0.55rem 0.75rem;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  input:focus, select:focus { border-color: var(--accent); }
+  select option { background: var(--surface); }
+
+  .item-result {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+  }
+
+  .unit-price {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 800;
+  }
+
+  .badge {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.6rem;
+    border-radius: 100px;
+    font-weight: 700;
+  }
+
+  .badge.best { background: rgba(94,203,132,0.15); color: var(--win); border: 1px solid var(--win); }
+  .badge.worst { background: rgba(232,96,96,0.1); color: var(--lose); border: 1px solid var(--lose); }
+  .badge.neutral { background: rgba(255,255,255,0.05); color: var(--muted); border: 1px solid var(--border); }
+
+  .savings-bar {
+    margin-top: 2rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+
+  .savings-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+
+  .savings-amount {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--win);
+  }
+
+  .savings-sub { font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; }
+
+  .bar-track {
+    margin-top: 1.25rem;
+    background: var(--surface);
+    border-radius: 100px;
+    height: 8px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 100px;
+    background: linear-gradient(90deg, var(--win), var(--accent));
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    border-radius: 8px;
+    padding: 0.65rem 1.2rem;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+    letter-spacing: 0.04em;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0f0e0c;
+    font-weight: 700;
+  }
+  .btn-primary:hover { background: #f0d060; transform: translateY(-1px); }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .btn-ghost:hover { border-color: var(--text); color: var(--text); }
+
+  .tips {
+    margin-top: 2rem;
+    padding: 1.25rem;
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+  }
+
+  .tips-title {
+    font-size: 0.62rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 0.75rem;
+  }
+
+  .tips ul { list-style: none; display: flex; flex-direction: column; gap: 0.4rem; }
+  .tips li { font-size: 0.73rem; color: var(--muted); line-height: 1.5; }
+  .tips li::before { content: "→ "; color: var(--accent2); }
+
+  .no-result { color: var(--muted); font-size: 0.78rem; }
+
+  @media (max-width: 480px) {
+    .fields { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="container">
+
+  <header>
+    <p class="eyebrow">Supermarket Price Checker</p>
+    <h1>Unit Price<br><span>Showdown</span></h1>
+    <p class="subtitle">Stop getting tricked by per-item vs per-weight pricing.<br>Add options, see the real cost per 100g.</p>
+  </header>
+
+  <div class="items-wrapper" id="items"></div>
+
+  <div class="actions">
+    <button class="btn btn-primary" onclick="addItem()">+ Add Option</button>
+    <button class="btn btn-ghost" onclick="reset()">Reset</button>
+  </div>
+
+  <div class="savings-bar" id="savings" style="display:none">
+    <p class="savings-label">You save by choosing best option</p>
+    <div class="savings-amount" id="savingsAmt"></div>
+    <p class="savings-sub" id="savingsSub"></p>
+    <div class="bar-track"><div class="bar-fill" id="savingsBar" style="width:0%"></div></div>
+  </div>
+
+  <div class="tips">
+    <p class="tips-title">How to use this</p>
+    <ul>
+      <li>Loose bananas priced per kg: set type to "per kg", enter weight in grams, enter price</li>
+      <li>Bundled bananas at a fixed price: set type to "per item/bundle", enter weight of the whole bundle in grams</li>
+      <li>Everything is normalised to cost per 100g so you can compare directly</li>
+      <li>Weigh bundles using the supermarket's produce scale — it's free!</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+  let items = [];
+  let counter = 0;
+
+  function addItem(name = '', price = '', weight = '', type = 'per_kg') {
+    const id = ++counter;
+    items.push({ id, name, price, weight, type });
+    render();
+  }
+
+  function removeItem(id) {
+    items = items.filter(i => i.id !== id);
+    render();
+  }
+
+  function updateItem(id, field, value) {
+    const item = items.find(i => i.id === id);
+    if (item) { item[field] = value; render(); }
+  }
+
+  function reset() {
+    items = []; counter = 0; render();
+  }
+
+  function computeUnitPrice(item) {
+    const price = parseFloat(item.price);
+    const weight = parseFloat(item.weight);
+    if (isNaN(price) || isNaN(weight) || weight === 0) return null;
+
+    if (item.type === 'per_kg') {
+      // price is $/kg, weight is grams of the pack
+      return (price / 1000) * 100; // cost per 100g
+    } else {
+      // per item/bundle: price is total $, weight is grams
+      return (price / weight) * 100; // cost per 100g
+    }
+  }
+
+  function render() {
+    const wrapper = document.getElementById('items');
+    
+    // Compute unit prices
+    const computed = items.map(item => ({
+      ...item,
+      unitPrice: computeUnitPrice(item)
+    }));
+
+    const validPrices = computed.filter(i => i.unitPrice !== null).map(i => i.unitPrice);
+    const minPrice = validPrices.length ? Math.min(...validPrices) : null;
+    const maxPrice = validPrices.length ? Math.max(...validPrices) : null;
+
+    wrapper.innerHTML = computed.map((item, idx) => {
+      const up = item.unitPrice;
+      const isWinner = up !== null && up === minPrice && validPrices.length > 1;
+      const isLoser  = up !== null && up === maxPrice && validPrices.length > 1 && minPrice !== maxPrice;
+
+      const cardClass = isWinner ? 'winner' : isLoser ? 'loser' : '';
+      const badge = validPrices.length < 2 || up === null ? `<span class="badge neutral">—</span>` :
+                    isWinner ? `<span class="badge best">✓ Best Value</span>` :
+                    isLoser  ? `<span class="badge worst">Pricier</span>` :
+                    `<span class="badge neutral">Mid</span>`;
+
+      const priceDisplay = up !== null
+        ? `<span class="unit-price" style="color:${isWinner ? 'var(--win)' : isLoser ? 'var(--lose)' : 'var(--text)'}">\$${up.toFixed(2)}<span style="font-size:0.55em;font-weight:400;color:var(--muted)"> /100g</span></span>`
+        : `<span class="no-result">Enter price + weight</span>`;
+
+      const weightLabel = item.type === 'per_kg' ? 'Pack weight (g)' : 'Total weight (g)';
+      const priceLabel  = item.type === 'per_kg' ? 'Price ($/kg shelf tag)' : 'Price ($ total)';
+
+      return `
+        <div class="item-card ${cardClass}" id="card-${item.id}">
+          <div class="item-header">
+            <span class="item-label">Option ${idx + 1}</span>
+            <button class="remove-btn" onclick="removeItem(${item.id})">✕ remove</button>
+          </div>
+          <div class="fields">
+            <div class="field" style="grid-column:1/-1">
+              <label>Name (optional)</label>
+              <input type="text" placeholder="e.g. Loose bananas" value="${item.name}"
+                oninput="updateItem(${item.id},'name',this.value)">
+            </div>
+            <div class="field" style="grid-column:1/-1">
+              <label>Pricing type</label>
+              <select onchange="updateItem(${item.id},'type',this.value)">
+                <option value="per_kg" ${item.type==='per_kg'?'selected':''}>Per kg (weighed/loose)</option>
+                <option value="per_item" ${item.type==='per_item'?'selected':''}>Per item / bundle (fixed price)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>${priceLabel}</label>
+              <input type="number" min="0" step="0.01" placeholder="e.g. 2.99" value="${item.price}"
+                oninput="updateItem(${item.id},'price',this.value)">
+            </div>
+            <div class="field">
+              <label>${weightLabel}</label>
+              <input type="number" min="0" step="1" placeholder="e.g. 850" value="${item.weight}"
+                oninput="updateItem(${item.id},'weight',this.value)">
             </div>
           </div>
-        )}
-
-        {/* Item cards */}
-        {computed.map((item, idx) => {
-          const isWinner = item.per100g !== null && item.per100g === minP && hasDiff;
-          const isLoser = item.per100g !== null && item.per100g === maxP && hasDiff;
-
-          return (
-            <div key={item.id} style={{
-              background: "#fff",
-              borderRadius: 16,
-              marginBottom: 12,
-              overflow: "hidden",
-              border: isWinner ? "2px solid #2d8a4e" : isLoser ? "2px solid #c0392b" : "2px solid #ddd5c4",
-              boxShadow: isWinner ? "0 4px 20px rgba(45,138,78,0.15)" : "none",
-            }}>
-              {/* Card header */}
-              <div style={{
-                background: isWinner ? "#2d8a4e" : isLoser ? "#c0392b" : "#e8e0d0",
-                padding: "10px 16px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}>
-                <div style={{
-                  fontWeight: "bold",
-                  fontSize: 13,
-                  color: isWinner || isLoser ? "#fff" : "#5a4a2a",
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                }}>
-                  {isWinner ? "✓ Best value" : isLoser ? "✗ More expensive" : `Option ${idx + 1}`}
-                </div>
-                {items.length > 1 && (
-                  <button onClick={() => remove(item.id)} style={{
-                    background: "rgba(0,0,0,0.2)",
-                    border: "none",
-                    borderRadius: 8,
-                    color: "#fff",
-                    fontSize: 12,
-                    padding: "4px 10px",
-                    cursor: "pointer",
-                  }}>remove</button>
-                )}
-              </div>
-
-              {/* Fields */}
-              <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
-                <input
-                  type="text"
-                  placeholder="Name (e.g. Loose bananas)"
-                  value={item.name}
-                  onChange={(e) => update(item.id, "name", e.target.value)}
-                  style={inputStyle}
-                />
-
-                {/* Pricing type toggle */}
-                <div style={{ display: "flex", borderRadius: 10, overflow: "hidden", border: "1.5px solid #ddd5c4" }}>
-                  {PRICING_TYPES.map((t) => (
-                    <button key={t.value} onClick={() => update(item.id, "type", t.value)} style={{
-                      flex: 1,
-                      padding: "11px 8px",
-                      fontSize: 12,
-                      fontFamily: "Georgia, serif",
-                      border: "none",
-                      cursor: "pointer",
-                      background: item.type === t.value ? "#1a3a2a" : "transparent",
-                      color: item.type === t.value ? "#e8b84b" : "#7a6a4a",
-                      fontWeight: item.type === t.value ? "bold" : "normal",
-                      transition: "all 0.15s",
-                      lineHeight: 1.3,
-                    }}>{t.label}</button>
-                  ))}
-                </div>
-
-                <div style={{ display: "flex", gap: 10 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={labelStyle}>{item.type === "per_kg" ? "Price ($/kg)" : "Total price ($)"}</div>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      placeholder="e.g. 2.99"
-                      value={item.price}
-                      onChange={(e) => update(item.id, "price", e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={labelStyle}>{item.type === "per_kg" ? "Pack weight (g)" : "Bundle weight (g)"}</div>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      placeholder="e.g. 850"
-                      value={item.weight}
-                      onChange={(e) => update(item.id, "weight", e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
-                </div>
-
-                {/* Result */}
-                {item.per100g !== null ? (
-                  <div style={{
-                    background: isWinner ? "#edfaf2" : isLoser ? "#fdf0ee" : "#f5f0e8",
-                    borderRadius: 10,
-                    padding: "10px 14px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}>
-                    <div style={{ fontSize: 11, color: "#7a6a4a", letterSpacing: "0.1em", textTransform: "uppercase" }}>Cost per 100g</div>
-                    <div style={{
-                      fontSize: 22,
-                      fontWeight: "bold",
-                      color: isWinner ? "#2d8a4e" : isLoser ? "#c0392b" : "#1a3a2a",
-                    }}>
-                      ${item.per100g.toFixed(2)}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 12, color: "#aaa", textAlign: "center", padding: "8px 0" }}>
-                    Enter price + weight to see cost
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Add button */}
-        <button onClick={add} style={{
-          width: "100%",
-          padding: "16px",
-          background: "transparent",
-          border: "2px dashed #c4b89a",
-          borderRadius: 16,
-          fontSize: 15,
-          color: "#7a6a4a",
-          fontFamily: "Georgia, serif",
-          cursor: "pointer",
-          marginBottom: 16,
-        }}>+ Add another option</button>
-
-        {/* Tip */}
-        <div style={{
-          background: "#e8f4ec",
-          borderRadius: 12,
-          padding: "12px 16px",
-          fontSize: 12,
-          color: "#2d6a3a",
-          lineHeight: 1.6,
-        }}>
-          <strong>💡 Tip:</strong> Weigh bundles on the produce scale in-store (it's free!). Then switch to Fixed price and enter the weight — you'll get a fair comparison instantly.
+          <div class="item-result">
+            ${priceDisplay}
+            ${badge}
+          </div>
         </div>
-      </div>
-    </div>
-  );
-}
+      `;
+    }).join('');
 
-const inputStyle = {
-  width: "100%",
-  padding: "13px 14px",
-  fontSize: 16,
-  fontFamily: "Georgia, serif",
-  border: "1.5px solid #ddd5c4",
-  borderRadius: 10,
-  background: "#faf8f4",
-  color: "#1a1a1a",
-  outline: "none",
-  boxSizing: "border-box",
-};
+    // Savings section
+    const savingsEl = document.getElementById('savings');
+    if (validPrices.length >= 2 && minPrice !== maxPrice) {
+      const saving = maxPrice - minPrice;
+      const pct = ((saving / maxPrice) * 100).toFixed(0);
+      document.getElementById('savingsAmt').textContent = `$${saving.toFixed(2)} per 100g`;
+      document.getElementById('savingsSub').textContent = `Best option is ${pct}% cheaper than the priciest`;
+      document.getElementById('savingsBar').style.width = `${pct}%`;
+      savingsEl.style.display = 'block';
+    } else {
+      savingsEl.style.display = 'none';
+    }
+  }
 
-const labelStyle = {
-  fontSize: 10,
-  color: "#9a8a6a",
-  letterSpacing: "0.12em",
-  textTransform: "uppercase",
-  marginBottom: 5,
-};
+  // Seed with banana example
+  addItem('Loose bananas (per kg)', '2.99', '850', 'per_kg');
+  addItem('Banana bundle (fixed price)', '3.50', '900', 'per_item');
+</script>
+</body>
+</html>
