@@ -1,0 +1,274 @@
+import { useState, useCallback } from "react";
+
+const PRICING_TYPES = [
+  { value: "per_kg", label: "$/kg (loose/weighed)" },
+  { value: "per_item", label: "Fixed price (bundle/pack)" },
+];
+
+let idCounter = 0;
+const newItem = (overrides = {}) => ({
+  id: ++idCounter,
+  name: "",
+  price: "",
+  weight: "",
+  type: "per_kg",
+  ...overrides,
+});
+
+function computePer100g(item) {
+  const price = parseFloat(item.price);
+  const weight = parseFloat(item.weight);
+  if (isNaN(price) || isNaN(weight) || weight <= 0) return null;
+  if (item.type === "per_kg") return (price / 1000) * 100;
+  return (price / weight) * 100;
+}
+
+export default function App() {
+  const [items, setItems] = useState([
+    newItem({ name: "Loose bananas", price: "2.99", weight: "850", type: "per_kg" }),
+    newItem({ name: "Banana bundle", price: "3.50", weight: "900", type: "per_item" }),
+  ]);
+
+  const add = () => setItems((p) => [...p, newItem()]);
+  const remove = (id) => setItems((p) => p.filter((i) => i.id !== id));
+  const update = (id, field, value) =>
+    setItems((p) => p.map((i) => (i.id === id ? { ...i, [field]: value } : i)));
+
+  const computed = items.map((item) => ({ ...item, per100g: computePer100g(item) }));
+  const valid = computed.filter((i) => i.per100g !== null);
+  const minP = valid.length ? Math.min(...valid.map((i) => i.per100g)) : null;
+  const maxP = valid.length ? Math.max(...valid.map((i) => i.per100g)) : null;
+  const hasDiff = minP !== null && maxP !== null && minP !== maxP;
+
+  const savingPer100g = hasDiff ? maxP - minP : 0;
+  const savingPct = hasDiff ? ((savingPer100g / maxP) * 100).toFixed(0) : 0;
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "#f5f0e8",
+      fontFamily: "'Georgia', serif",
+      padding: "0 0 80px",
+    }}>
+      {/* Header */}
+      <div style={{
+        background: "#1a3a2a",
+        padding: "24px 20px 20px",
+        borderBottom: "4px solid #e8b84b",
+      }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.2em", color: "#e8b84b", textTransform: "uppercase", marginBottom: 6 }}>
+          Supermarket Price Checker
+        </div>
+        <div style={{ fontSize: 26, fontWeight: "bold", color: "#f5f0e8", lineHeight: 1.1 }}>
+          Which is actually<br />cheaper?
+        </div>
+        <div style={{ fontSize: 12, color: "#7aaa8a", marginTop: 8 }}>
+          Compares per-kg and per-bundle prices fairly
+        </div>
+      </div>
+
+      <div style={{ padding: "16px 16px 0" }}>
+
+        {/* Savings summary */}
+        {hasDiff && (
+          <div style={{
+            background: "#1a3a2a",
+            borderRadius: 16,
+            padding: "16px 20px",
+            marginBottom: 16,
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+          }}>
+            <div style={{ fontSize: 36 }}>💰</div>
+            <div>
+              <div style={{ color: "#7aaa8a", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                Best option saves you
+              </div>
+              <div style={{ color: "#e8b84b", fontSize: 24, fontWeight: "bold", lineHeight: 1.1 }}>
+                ${savingPer100g.toFixed(2)}<span style={{ fontSize: 13, color: "#7aaa8a", fontWeight: "normal" }}> /100g</span>
+              </div>
+              <div style={{ color: "#7aaa8a", fontSize: 12, marginTop: 2 }}>
+                {savingPct}% cheaper than the priciest option
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Item cards */}
+        {computed.map((item, idx) => {
+          const isWinner = item.per100g !== null && item.per100g === minP && hasDiff;
+          const isLoser = item.per100g !== null && item.per100g === maxP && hasDiff;
+
+          return (
+            <div key={item.id} style={{
+              background: "#fff",
+              borderRadius: 16,
+              marginBottom: 12,
+              overflow: "hidden",
+              border: isWinner ? "2px solid #2d8a4e" : isLoser ? "2px solid #c0392b" : "2px solid #ddd5c4",
+              boxShadow: isWinner ? "0 4px 20px rgba(45,138,78,0.15)" : "none",
+            }}>
+              {/* Card header */}
+              <div style={{
+                background: isWinner ? "#2d8a4e" : isLoser ? "#c0392b" : "#e8e0d0",
+                padding: "10px 16px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}>
+                <div style={{
+                  fontWeight: "bold",
+                  fontSize: 13,
+                  color: isWinner || isLoser ? "#fff" : "#5a4a2a",
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                }}>
+                  {isWinner ? "✓ Best value" : isLoser ? "✗ More expensive" : `Option ${idx + 1}`}
+                </div>
+                {items.length > 1 && (
+                  <button onClick={() => remove(item.id)} style={{
+                    background: "rgba(0,0,0,0.2)",
+                    border: "none",
+                    borderRadius: 8,
+                    color: "#fff",
+                    fontSize: 12,
+                    padding: "4px 10px",
+                    cursor: "pointer",
+                  }}>remove</button>
+                )}
+              </div>
+
+              {/* Fields */}
+              <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+                <input
+                  type="text"
+                  placeholder="Name (e.g. Loose bananas)"
+                  value={item.name}
+                  onChange={(e) => update(item.id, "name", e.target.value)}
+                  style={inputStyle}
+                />
+
+                {/* Pricing type toggle */}
+                <div style={{ display: "flex", borderRadius: 10, overflow: "hidden", border: "1.5px solid #ddd5c4" }}>
+                  {PRICING_TYPES.map((t) => (
+                    <button key={t.value} onClick={() => update(item.id, "type", t.value)} style={{
+                      flex: 1,
+                      padding: "11px 8px",
+                      fontSize: 12,
+                      fontFamily: "Georgia, serif",
+                      border: "none",
+                      cursor: "pointer",
+                      background: item.type === t.value ? "#1a3a2a" : "transparent",
+                      color: item.type === t.value ? "#e8b84b" : "#7a6a4a",
+                      fontWeight: item.type === t.value ? "bold" : "normal",
+                      transition: "all 0.15s",
+                      lineHeight: 1.3,
+                    }}>{t.label}</button>
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={labelStyle}>{item.type === "per_kg" ? "Price ($/kg)" : "Total price ($)"}</div>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="e.g. 2.99"
+                      value={item.price}
+                      onChange={(e) => update(item.id, "price", e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={labelStyle}>{item.type === "per_kg" ? "Pack weight (g)" : "Bundle weight (g)"}</div>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="e.g. 850"
+                      value={item.weight}
+                      onChange={(e) => update(item.id, "weight", e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+
+                {/* Result */}
+                {item.per100g !== null ? (
+                  <div style={{
+                    background: isWinner ? "#edfaf2" : isLoser ? "#fdf0ee" : "#f5f0e8",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}>
+                    <div style={{ fontSize: 11, color: "#7a6a4a", letterSpacing: "0.1em", textTransform: "uppercase" }}>Cost per 100g</div>
+                    <div style={{
+                      fontSize: 22,
+                      fontWeight: "bold",
+                      color: isWinner ? "#2d8a4e" : isLoser ? "#c0392b" : "#1a3a2a",
+                    }}>
+                      ${item.per100g.toFixed(2)}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: "#aaa", textAlign: "center", padding: "8px 0" }}>
+                    Enter price + weight to see cost
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Add button */}
+        <button onClick={add} style={{
+          width: "100%",
+          padding: "16px",
+          background: "transparent",
+          border: "2px dashed #c4b89a",
+          borderRadius: 16,
+          fontSize: 15,
+          color: "#7a6a4a",
+          fontFamily: "Georgia, serif",
+          cursor: "pointer",
+          marginBottom: 16,
+        }}>+ Add another option</button>
+
+        {/* Tip */}
+        <div style={{
+          background: "#e8f4ec",
+          borderRadius: 12,
+          padding: "12px 16px",
+          fontSize: 12,
+          color: "#2d6a3a",
+          lineHeight: 1.6,
+        }}>
+          <strong>💡 Tip:</strong> Weigh bundles on the produce scale in-store (it's free!). Then switch to Fixed price and enter the weight — you'll get a fair comparison instantly.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const inputStyle = {
+  width: "100%",
+  padding: "13px 14px",
+  fontSize: 16,
+  fontFamily: "Georgia, serif",
+  border: "1.5px solid #ddd5c4",
+  borderRadius: 10,
+  background: "#faf8f4",
+  color: "#1a1a1a",
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+const labelStyle = {
+  fontSize: 10,
+  color: "#9a8a6a",
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  marginBottom: 5,
+};
